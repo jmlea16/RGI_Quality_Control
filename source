@@ -1,0 +1,827 @@
+var drawingTools = Map.drawingTools(); 
+drawingTools.layers().reset();
+drawingTools.setShown(false)
+///
+//Welcome panel
+var welcomePanel=ui.Panel({
+    style: {
+    position: 'top-center'
+    }
+  });
+var welcomeTitle=ui.Label({
+      value: 'Randolph Glacier Inventory (v7 alpha) Reviewer Tool',
+      style: {
+        margin: '1px 10px 1px 10px',
+        fontSize: '20px',
+        fontWeight: 'bold',
+        textAlign: 'center'
+        }
+    });
+var welcomeSubtitle=ui.Label({value:'Written by James M. Lea, University of Liverpool',
+      style: {
+        margin: '1px 10px 1px 10px',
+        textAlign: 'center',
+        stretch:'both',
+        fontSize: '10px'
+        }});
+var welcomeSubtitle1=ui.Label({value:'Twitter: @JamesMLea',
+      style: {
+        margin: '1px 10px 1px 10px',
+        textAlign: 'center',
+        stretch:'both',
+        fontSize: '10px'
+        }}).setUrl('https://twitter.com/JamesMLea');
+var welcomeSubtitle2=ui.Label({value:'Email: j.lea@liverpool.ac.uk',
+      style: {
+        margin: '1px 10px 1px 10px',
+        textAlign: 'center',
+        stretch:'both',
+        fontSize: '10px'
+        }}).setUrl('mailto:j.lea@liverpool.ac.uk');
+var welcomeLineBreak=ui.Label({value:'__________________________________________________________________________',
+                            style:{stretch:'both',margin: '1px 10px 3px 10px',}})
+
+welcomePanel.add(welcomeTitle);
+welcomePanel.add(welcomeSubtitle);
+welcomePanel.add(welcomeSubtitle1).add(welcomeSubtitle2);
+welcomePanel.add(welcomeLineBreak)
+Map.add(welcomePanel);
+
+///
+//Select RGI region
+var regionPanel=ui.Panel({
+    style: {
+    position: 'top-center'
+    }
+  }).setLayout(ui.Panel.Layout.flow('horizontal',true));
+var regionLabel=ui.Label({value:'Step 1: Select RGI region to review:',style:{stretch:'horizontal',
+        textAlign: 'center',fontWeight:'bold',margin: '1px 10px 10px 10px',}});
+var regionLabel1=ui.Label({value:'If browser takes a while/shows Page Unresponsive message, please wait (it will load!)',style:{stretch:'horizontal',
+        fontSize: '12px',textAlign: 'center',margin: '1px 10px 10px 10px',}});
+var regionDropdown= {
+  Alaska_01: [1],Western_Canada_USA_02: [2],Arctic_Canada_North_03: [3],Arctic_Canada_South_04: [4],Greenland_Periphery_05: [5],
+  Iceland_06: [6],Svalbard_and_Jan_Mayen_07: [7],Scandinavia_08: [8],Russian_Arctic_09: [9],Asia_North_10: [10],
+  Central_Europe_11: [11],Caucasus_and_Middle_East_12: [12],Asia_Central_13: [13],Asia_South_West_14: [14],
+  Asia_South_East_15: [15],Low_Latitudes_16: [16],Southern_Andes_17: [17],New_Zealand_18: [18],Antarctic_and_Subantarctic_19: [18]
+};
+var regionName
+var RGIRegion
+var RGIpath
+var RGIsimplifiedPath
+var regionSelect=ui.Select({
+  placeholder:'Select RGI region',
+  style: {
+          margin: '1px 10px 1px 10px',
+          //textAlign: 'center',
+          fontSize: '12px',
+          stretch:'both',
+          textAlign:'center'
+        }  ,
+  items: Object.keys(regionDropdown),
+
+});
+var regionButton=ui.Button({label:'Go',style:{stretch:'both',textAlign:'center',fontWeight:'bold'}})
+regionButton.onClick(function(){
+  regionName=ee.String(regionSelect.getValue()).slice(0,-3)
+  RGIRegion=ee.String(regionSelect.getValue()).slice(-2).getInfo()
+  RGIpath='users/Jmleaglacio/RGI7alpha/RGI'+RGIRegion;
+  RGIsimplifiedPath='users/Jmleaglacio/RGI7alpha/RGI7alphaSimplified_combined';
+  print(regionName,RGIRegion,RGIpath,RGIsimplifiedPath)
+  Map.clear()
+  start()
+})
+welcomePanel.add(regionLabel).add(regionSelect).add(regionButton).add(regionLabel1)
+//Map.add(regionPanel)
+
+///
+var startMonth=6;
+var endMonth=10;
+var startDate='2000-01-01';
+var endDate='2000-12-31';
+var cloudCover='20';
+// var RGIRegion='03'
+var revisualiseButton
+var instructionLabel
+var satelliteMenu
+var satelliteLabelA;
+var satelliteLabelB;
+var tileChooseTextBox ;
+var tileChooseFlag=-1;  //flag for UI
+var tileNumber  //number for UI
+var loc;
+var RGIgrid;
+var RGI;
+var RGIsimplified;
+var RGIimageColl;
+var restartPanel;
+var mail;
+var emailLabel;
+var emailLabelA;
+var emailLabelB;
+var emailLabel1;
+var emailLabel2;
+var emailLabel3;
+var emailLabel4;
+var emailLabel5;
+var emailLabel6;
+var emailLabel7;
+var satelliteLabel;
+//Create linked map
+var linkedMap = ui.Map();
+linkedMap.style().set('cursor', 'crosshair');
+
+var linker = ui.Map.Linker([ui.root.widgets().get(0), linkedMap]);
+var splitPanel = ui.SplitPanel({
+  firstPanel: linker.get(0),
+  secondPanel: linker.get(1),
+  orientation: 'horizontal',
+  wipe: true,
+  style: {stretch: 'both'}
+});
+
+
+
+var start=function(){
+
+var RGIglaciers=ee.FeatureCollection(RGIpath);
+
+
+//Set drawingTools options
+
+drawingTools.clear()
+drawingTools.setShown(false)
+linkedMap.drawingTools().setShown(false)
+// Create label
+instructionLabel=ui.Panel({
+    style: {
+    position: 'bottom-center'
+    }
+  })
+var instructionText=ui.Label({value:'Step 3: Click on tile to review or systematically go through tiles (options in bottom left)',
+                              style: {
+                                margin: '1px 10px 1px 10px',
+                                textAlign: 'center',
+                                fontWeight:'bold',
+                                fontSize: '12px',
+                                stretch:'both'
+                              }});
+var instructionText1a=ui.Label({value:'If Page Unresponsive message appears, please ignore and wait.',
+                                style: {
+                                  margin: '1px 10px 1px 10px',
+                                  textAlign: 'center',
+                                  fontSize: '12px',
+                                  stretch:'both'
+                                }});
+
+RGI=ee.FeatureCollection(RGIpath);
+RGIsimplified=ee.Feature(ee.FeatureCollection(RGIsimplifiedPath)
+                .filter(ee.Filter.eq('rgi7region',RGIRegion)).first());
+
+//function to get index of month
+var monthNameToNum=function(monthname) {
+    var month = months.indexOf(monthname)+1;
+    return ee.Number(month);
+}
+
+//Set up image vis options
+satelliteMenu = ui.Panel({
+  style: {
+    position: 'top-left',
+    padding: '8px 15px',
+    stretch:'both'
+  }
+});
+satelliteLabel=ui.Label({value:'Step 2: Choose image options',
+        style: {
+          margin: '1px 10px 1px 10px',
+          //textAlign: 'center',
+          fontWeight:'bold',
+          fontSize: '12px',
+          stretch:'both'
+        }});
+satelliteLabelA=ui.Label({value:'RGI census year = 2000',
+        style: {
+          margin: '1px 10px 1px 10px',
+          textAlign: 'center',
+          fontWeight:'bold',
+          fontSize: '12px',
+          stretch:'both'
+        }});
+satelliteLabelB=ui.Label({value:'Input format: YYYY-MM-DD',
+        style: {
+          margin: '1px 10px 1px 10px',
+          textAlign: 'center',
+          // fontWeight:'bold',
+          fontSize: '12px',
+          stretch:'both'
+        }});
+var satelliteLabel1=ui.Label({value:'Max. image cloudiness (%):',
+        style: {
+          margin: '1px 10px 1px 10px',
+          //textAlign: 'center',
+          fontSize: '12px',
+          stretch:'both'
+        }});
+// Dropdown menus for range of months
+var months_dropdown = {
+  January: [1],February: [2],March: [3],April: [4],May: [5],
+  June: [6],July: [7],August: [8],September: [9],October: [10],
+  November: [11],December: [12]
+};
+var months = [
+    'January', 'February', 'March', 'April', 'May',
+    'June', 'July', 'August', 'September',
+    'October', 'November', 'December'
+    ];
+
+var select1 = ui.Select({
+  placeholder:'Month range start',
+  style: {
+          margin: '1px 10px 1px 10px',
+          //textAlign: 'center',
+          fontSize: '12px',
+          stretch:'both'
+        }  ,
+  items: Object.keys(months_dropdown),
+  // value:6,
+  onChange: function() {
+    startMonth=monthNameToNum(select1.getValue());
+  }
+});
+var select2 = ui.Select({
+  placeholder:'Month range end',
+  style: {
+          margin: '1px 10px 1px 10px',
+          //textAlign: 'center',
+          fontSize: '12px',
+          stretch:'both'
+        }  ,
+  // value:10,
+  items: Object.keys(months_dropdown),
+  onChange: function() {
+    endMonth=monthNameToNum(select2.getValue());
+  }
+});
+var startDateBox=ui.Textbox({
+  placeholder: '2000-01-01 (start date)',
+  value:'2000-01-01 (start date)',
+  style:{stretch:'both',margin: '1px 10px 1px 10px'},
+  onChange: function() {
+    startDate=startDateBox.getValue();
+    // Map.unlisten();
+    // glacierNames(glaciers, inputVars);
+  }
+});
+
+var endDateBox=ui.Textbox({
+  placeholder: '2000-12-31 (end date)',
+  value:'2000-12-31 (end date)',
+  style:{stretch:'both',margin: '1px 10px 1px 10px'},
+  onChange: function() {
+    endDate=endDateBox.getValue();
+    // Map.unlisten();
+    // glacierNames(glaciers, inputVars);
+  }
+});
+var cloudinessBox=ui.Textbox({
+  placeholder: 'Maximum cloudiness of image (20% default):',
+  style: {
+          margin: '1px 10px 1px 10px',
+          //textAlign: 'center',
+          fontSize: '12px',
+          stretch:'both'
+        }  ,
+  value:'20',
+  onChange: function(text) {
+    cloudCover=ee.Number.parse(cloudinessBox.getValue());
+  }
+});
+
+
+
+//Create initial menu
+satelliteMenu.add(satelliteLabel).add(satelliteLabelA).add(satelliteLabelB);
+satelliteMenu.add(startDateBox);
+satelliteMenu.add(endDateBox);
+satelliteMenu.add(satelliteLabel1);
+satelliteMenu.add(cloudinessBox);
+Map.add(satelliteMenu)
+
+
+//Import RGI grid
+var RGIgridInitial=ee.FeatureCollection('users/Jmleaglacio/RGI7alpha/RGI7alphaGrids_combined')
+                      .filter(ee.Filter.eq('rgi7region',RGIRegion)).toList(100)
+var numGridTiles=ee.Number(RGIgridInitial.size()).getInfo()
+var numGridTilesList=ee.List.sequence(1,numGridTiles)
+//Give each tile an ID from 1 to X
+RGIgrid=ee.FeatureCollection(numGridTilesList.map(function(num){
+  return ee.Feature(RGIgridInitial.get(ee.Number(num).subtract(1))).set('tileId',num)
+}))
+var mapCentre=ee.List(ee.Feature(ee.Feature(ee.FeatureCollection(RGIgridInitial).union(1000).first())
+              .centroid(10000,'EPSG:4326')).geometry().coordinates()).getInfo()
+
+//RGI visualisation parameters
+// var RGIrandom=ee.FeatureCollection(RGI).randomColumn('randVis')//.aside(print)
+RGIimageColl=ee.Image('users/Jmleaglacio/RGI7alpha/RGI7_randomImageVis')
+// RGIimageColl=ee.Image(ee.FeatureCollection(RGIrandom).reduceToImage(['randVis'],ee.Reducer.max()))
+//                   .rename(ee.String('RGI').cat(RGIRegion))
+                  
+//Set up Map panels for choosing tiles
+var tileChoosePanel=ui.Panel({
+    style: {
+    position: 'bottom-left'
+    }
+  })
+var tileChooseLabel=ui.Label({value:'Choose option below, or click tile on map.',
+                      style: {
+                            margin: '1px 10px 1px 10px',
+                            //textAlign: 'center',
+                            fontSize: '12px',
+                            stretch:'both'
+                          }  
+});
+
+
+//Options for initial map visualisation
+var tileChooseButton=ui.Button('Start at tile 1');
+tileChooseButton.onClick(function(){
+  tileChooseFlag=1;
+  Map.unlisten();
+  Map.clear();
+  linkedMap.clear();
+  drawingTools.layers().reset();
+  drawingTools.setShown(true);
+  // Map.drawingTools().setShape('point')
+  drawingTools.layers().set(0,ui.Map.GeometryLayer({
+    name:'IncorrectOutlineMarker',
+    color:'red'
+  }));
+  drawingTools.setDrawModes(['point','polygon']);
+  // startMonth=ee.Number(monthNameToNum(select1.getValue()));
+  // endMonth=ee.Number(monthNameToNum(select2.getValue()));
+  startDate=ee.String(startDateBox.getValue()).slice(0,10);
+  endDate=ee.String(endDateBox.getValue()).slice(0,10);
+  cloudCover=ee.Number.parse(cloudinessBox.getValue());
+  ui.root.widgets().reset([splitPanel]);
+  imageVis();
+});
+tileChooseTextBox=ui.Textbox({
+  placeholder:'Go to tile X of '+numGridTiles,
+});
+tileChooseTextBox.onChange(function(){
+  tileChooseFlag=2;
+  Map.unlisten();
+  Map.clear();
+  linkedMap.clear();
+  drawingTools.layers().reset();
+  drawingTools.clear()
+  drawingTools.setShown(true);
+  // Map.drawingTools().setShape('point')
+  drawingTools.layers().set(0,ui.Map.GeometryLayer({
+    name:'IncorrectOutlineMarker',
+    color:'red'
+  }));
+  drawingTools.setDrawModes(['point','polygon']);
+  // startMonth=ee.Number(monthNameToNum(select1.getValue()));
+  // endMonth=ee.Number(monthNameToNum(select2.getValue()));
+  startDate=ee.String(startDateBox.getValue()).slice(0,10);
+  endDate=ee.String(endDateBox.getValue()).slice(0,10);
+  cloudCover=ee.Number.parse(cloudinessBox.getValue());
+  ui.root.widgets().reset([splitPanel]);
+  imageVis();
+});
+
+var nextTileButton=ui.Button('Go to next tile after clicking Get List');
+nextTileButton.onClick(function(){
+  if (ee.Number(tileNumber).add(1).getInfo()>numGridTiles){
+      var warningTilePanel=ui.Panel({
+        style: {
+        position: 'top-center'
+        }
+      })
+      var warningTileLabel=ui.Label('No more tiles to review')
+      var warningTileButton=ui.Button('Close')
+      warningTileButton.onClick(function(){
+        Map.remove(warningTilePanel)
+      })
+      warningTilePanel.add(warningTileLabel).add(warningTileButton)
+      Map.add(warningTilePanel)
+  } else {
+    tileChooseFlag=3;
+    Map.unlisten();
+    Map.clear();
+    linkedMap.clear();
+    drawingTools.layers().reset();
+    drawingTools.clear()
+    drawingTools.setShown(true);
+    // Map.drawingTools().setShape('point')
+    drawingTools.layers().set(0,ui.Map.GeometryLayer({
+      name:'IncorrectOutlineMarker',
+      color:'red'
+    }));
+    drawingTools.setDrawModes(['point','polygon']);
+    // startMonth=ee.Number(monthNameToNum(select1.getValue()));
+    // endMonth=ee.Number(monthNameToNum(select2.getValue()));
+    startDate=ee.String(startDateBox.getValue()).slice(0,10);
+    endDate=ee.String(endDateBox.getValue()).slice(0,10);
+    cloudCover=ee.Number.parse(cloudinessBox.getValue());
+    ui.root.widgets().reset([splitPanel]);
+    imageVis();
+  }
+})
+
+//Next tile/export glaciers with issues identified button/panel
+restartPanel=ui.Panel({
+  style: {
+  position: 'bottom-right'
+  }
+})
+
+// var restartButton=ui.Button('Restart');
+
+// restartButton.onClick(function(){
+//   Map.unlisten();
+//   Map.clear();
+//   linkedMap.clear();
+//   imageVis();
+// });
+
+
+var getListButton=ui.Button('Get List')
+var warningPanel=ui.Panel({
+  style: {
+  position: 'top-center'
+  }
+})
+var warningLabel=ui.Label('No glacier issues found to email. Go to next tile.')
+var warningButton=ui.Button({label:'Close',style:{stretch:'both'}})
+warningButton.onClick(function(){
+  Map.remove(warningPanel)
+})
+warningPanel.add(warningLabel).add(warningButton)
+
+getListButton.onClick(function(){
+  var unlikelyGeoms=Map.drawingTools().layers().get(0).toGeometry();
+  var glacIssues=ee.List(ee.FeatureCollection(RGIglaciers)
+                  .filterBounds(unlikelyGeoms)
+                  .aggregate_array('glac_id')).aside(print)
+  
+  if (glacIssues.size().getInfo()===0){
+    Map.add(warningPanel)
+  } else {               
+    //Auto generate email
+    var emailSequence=ee.List.sequence(0,ee.Number(ee.List(glacIssues).size()).divide(125).ceil().subtract(1),1).aside(print)
+    print(emailSequence.slice(-1))
+    var endSequence=ee.Number(emailSequence.slice(-1)).getInfo()
+    var i
+    var mail=[];
+    for (i = 0; i <= endSequence; i++) {
+      mail[i]="mailto:fabien.maussion@uibk.ac.at?subject=RGI issues (RGI region"+
+              RGIRegion+
+              " tile"+tileNumber.getInfo()+")&body=Please comment generally on issues identified here: %0d%0a %0d%0a"+
+              ee.List(glacIssues).slice(ee.Number(i).multiply(125),ee.Number(ee.Number(i).add(1)).multiply(125)).getInfo()
+    }
+    print(mail)
+    // mail = "mailto:buddy@mail.com?subject=RGI issues (RGI region "+RGIRegion+")&body="+glacIssues.getInfo();  
+    var emailPanel=ui.Panel({
+      style: {
+      position: 'top-center'
+      }
+    })
+    emailLabel=ui.Label({value:'Click on link(s) below to email issues to RGI Working Group.',style:{stretch:'both',textAlign:'center'}})
+    emailLabelA=ui.Label({value:'Please add a summary description of the issues identified',style:{stretch:'both',fontWeight:'bold',textAlign:'center',margin: '1px 10px 1px 10px'}})
+    emailLabelB=ui.Label({value:'in this tile to the email, without editing the list of glacier IDs',style:{stretch:'both',fontWeight:'bold',textAlign:'center',margin: '1px 10px 1px 10px',}})
+    
+    emailLabel1=ui.Label({value:'Email',style:{stretch:'both',textAlign:'center'}}).setUrl(mail[0]);
+    emailPanel.add(emailLabel).add(emailLabelA).add(emailLabelB).add(emailLabel1)
+    if (mail.length >1){
+      emailLabel2=ui.Label({value:'Email 2',style:{stretch:'both',textAlign:'center'}}).setUrl(mail[1]);
+      emailPanel.add(emailLabel2);
+    }
+    if (mail.length >2){
+      emailLabel3=ui.Label({value:'Email 3',style:{stretch:'both',textAlign:'center'}}).setUrl(mail[2]);
+      emailPanel.add(emailLabel3);
+    } 
+    if (mail.length >3){
+      emailLabel4=ui.Label({value:'Email 4',style:{stretch:'both',textAlign:'center'}}).setUrl(mail[3]);
+      emailPanel.add(emailLabel4)
+    }
+    if (mail.length >4){
+      emailLabel5=ui.Label({value:'Email 5',style:{stretch:'both',textAlign:'center'}}).setUrl(mail[4]);
+      emailPanel.add(emailLabel5);
+    }
+    if (mail.length >5){
+      emailLabel6=ui.Label({value:'Email 6',style:{stretch:'both',textAlign:'center'}}).setUrl(mail[5]);
+      emailPanel.add(emailLabel6);
+    }
+    if (mail.length >6){
+      emailLabel7=ui.Label({value:'Email 7',style:{stretch:'both',textAlign:'center'}}).setUrl(mail[6]);
+      emailPanel.add(emailLabel7);
+    }
+    var closeGetList=ui.Button({label:'Close',style:{stretch:'both'}})
+    closeGetList.onClick(function(){
+      Map.remove(emailPanel)
+    })
+    emailPanel.add(closeGetList)
+    Map.add(emailPanel)
+  }
+})
+ 
+restartPanel.add(getListButton).add(nextTileButton)//.add(restartButton)
+
+
+Map.onClick(function(coords) {
+  loc=coords;
+  tileChooseFlag=0;
+  Map.unlisten();
+  Map.clear();
+  linkedMap.clear();
+  Map.clear();
+  drawingTools.layers().reset();
+  drawingTools.setShown(true);
+  // Map.drawingTools().setShape('point')
+  drawingTools.layers().set(0,ui.Map.GeometryLayer({
+    name:'IncorrectOutlineMarker',
+    color:'red'
+  }));
+  drawingTools.setDrawModes(['point','polygon']);
+  // startMonth=ee.Number(monthNameToNum(select1.getValue()));
+  // endMonth=ee.Number(monthNameToNum(select2.getValue()));
+  startDate=ee.String(startDateBox.getValue()).slice(0,10);
+  endDate=ee.String(endDateBox.getValue()).slice(0,10);
+  cloudCover=ee.Number.parse(cloudinessBox.getValue());
+  ui.root.widgets().reset([splitPanel]);
+  imageVis();
+});
+
+revisualiseButton=ui.Button('Load new mosaic');
+revisualiseButton.onClick(function(){
+  tileChooseFlag=4;
+  
+  Map.unlisten();
+  Map.clear();
+  drawingTools.setShown(true);
+  drawingTools.setDrawModes(['point','polygon']);
+  // Map.drawingTools().setShape('point')
+  // drawingTools.layers().set(0,ui.Map.GeometryLayer({
+  //   name:'IncorrectOutlineMarker',
+  //   color:'red'
+  // }));
+  linkedMap.clear();
+  // startMonth=ee.Number(monthNameToNum(select1.getValue()));
+  // endMonth=ee.Number(monthNameToNum(select2.getValue()));
+  startDate=ee.String(startDateBox.getValue()).slice(0,10);
+  endDate=ee.String(endDateBox.getValue()).slice(0,10);
+  cloudCover=ee.Number.parse(cloudinessBox.getValue())
+  imageVis();
+})
+
+satelliteMenu.add(revisualiseButton.setDisabled(true))
+
+tileChoosePanel.add(tileChooseLabel).add(tileChooseButton).add(tileChooseTextBox);
+
+//Add panels/imagery etc to Map
+Map.add(tileChoosePanel);
+Map.setCenter(mapCentre[0],mapCentre[1],3);
+Map.addLayer(ee.FeatureCollection(RGIgrid),[],'RoI Grid');               
+Map.addLayer(RGIimageColl,{min:0,max:1,palette:['red','blue'],opacity:0.5})
+instructionLabel.clear();
+instructionLabel.add(instructionText).add(instructionText1a);
+Map.add(instructionLabel); 
+  
+}
+
+//Function to visualise imagery
+var imageVis=function(){
+  linkedMap.drawingTools().setShown(false)
+  drawingTools.setDrawModes(['point','polygon']);
+  revisualiseButton.setDisabled(false)
+  satelliteLabel.setValue('Change image options (optional)');
+    var instructionText1=ui.Label({value:'Wait for imagery to be collated and mosaicked (may take 30+ seconds) and use swiper to review outlines.',
+                          style: {
+                            margin: '1px 10px 1px 10px',
+                            textAlign: 'center',
+                            fontSize: '12px',
+                            stretch:'both'
+                          }});
+    var instructionText2=ui.Label({value:'Step 4: Use point and/or polygon drawing tools (top left) to mark glaciers where issues are identified.',
+                          style: {
+                            margin: '1px 10px 1px 10px',
+                            textAlign: 'center',
+                            fontWeight:'bold',
+                            fontSize: '12px',
+                            stretch:'both'
+                          }});
+    var instructionText3=ui.Label({value:'Once entire tile has been reviewed, click Get List button, click on link, and send email with info.',
+                          style: {
+                            margin: '1px 10px 1px 10px',
+                            textAlign: 'center',
+                            fontSize: '12px',
+                            stretch:'both'
+                          }});
+    instructionLabel.clear();
+    instructionLabel.add(instructionText1).add(instructionText2).add(instructionText3);
+    
+    
+    Map.unlisten();
+    
+    Map.add(instructionLabel);
+    Map.add(satelliteMenu);
+    var geomRectangle;
+    var point;
+    if(tileChooseFlag===0){
+      
+      point = ee.Feature(ee.Geometry.Point(loc.lon, loc.lat));
+      geomRectangle=ee.Feature(ee.FeatureCollection(RGIgrid
+                        .filterBounds(ee.Geometry.Point(loc.lon, loc.lat)).first()))//.geometry()
+      tileNumber=ee.Number(geomRectangle.get('tileId'));
+      Map.setCenter(loc.lon, loc.lat,6);
+      Map.addLayer(geomRectangle);
+    } else if (tileChooseFlag===1){
+      tileNumber=ee.Number(1);
+      geomRectangle=ee.Feature(ee.FeatureCollection(RGIgrid).first());
+      point=geomRectangle.centroid(100).geometry().coordinates().getInfo();
+      Map.setCenter(point[0], point[1],6);
+      Map.addLayer(geomRectangle);
+    } else if (tileChooseFlag===2){
+      tileNumber=ee.Number.parse(tileChooseTextBox.getValue())
+      geomRectangle=ee.Feature(ee.FeatureCollection(RGIgrid)
+            .filter(ee.Filter.eq('tileId',tileNumber)).first())
+      point=geomRectangle.centroid(100).geometry().coordinates().getInfo();
+      Map.setCenter(point[0], point[1],6);
+      Map.addLayer(geomRectangle);
+    } else if (tileChooseFlag===3){
+      tileNumber=ee.Number(tileNumber).add(1);
+      geomRectangle=ee.Feature(ee.FeatureCollection(RGIgrid)
+            .filter(ee.Filter.eq('tileId',tileNumber)).first())
+      point=geomRectangle.centroid(100).geometry().coordinates().getInfo();
+      Map.setCenter(point[0], point[1],6);
+      Map.addLayer(geomRectangle);
+    } else if (tileChooseFlag===4){
+      tileNumber=ee.Number(tileNumber);
+      geomRectangle=ee.Feature(ee.FeatureCollection(RGIgrid)
+            .filter(ee.Filter.eq('tileId',tileNumber)).first())
+      point=geomRectangle.centroid(100).geometry().coordinates().getInfo();
+      Map.setCenter(point[0], point[1],6);
+      Map.addLayer(geomRectangle);
+    }
+    
+    var roiGeom=ee.Feature(geomRectangle).geometry()//ee.Feature(ee.Feature(RGIsimplified).intersection(ee.Feature(geomRectangle),10,'EPSG:4326')).geometry()
+    
+    //get imagery
+    var imagePanel=ui.Panel({
+      style: {
+      position: 'top-right'
+      }
+    });
+    var imagePanelLabel=ui.Label({value:'Landsat 7 shown as default',
+        style: {
+          margin: '1px 10px 1px 10px',
+          textAlign: 'center',
+          fontWeight:'bold',
+          fontSize: '12px',
+          stretch:'both'
+        }});
+    var imagePanelLabel1=ui.Label({value:'Brackets = num. images available',
+        style: {
+          margin: '1px 10px 1px 10px',
+          textAlign: 'center',
+          fontWeight:'bold',
+          fontSize: '12px',
+          stretch:'both'
+        }});
+    imagePanel.insert(0,imagePanelLabel).insert(1,imagePanelLabel1)
+    //ASTER
+    var asterColl=ee.ImageCollection("ASTER/AST_L1T_003")
+                .filterDate(startDate,endDate)
+                .filterBounds(roiGeom)
+                // .filter(ee.Filter.calendarRange(startMonth,endMonth,'month'))
+                .filterMetadata('CLOUDCOVER','not_greater_than',cloudCover)
+                .select(['B3N','B02','B01'])
+                .sort('CLOUDCOVER',false)
+                .limit(100);
+    
+    var aster=asterColl.mosaic()
+                .clip(geomRectangle.geometry());
+    
+    var addAsterButton=function(input){
+      var AsterButton=ui.Button({label:input,style:{stretch:'both'}});
+      AsterButton.onClick(function(){
+        Map.layers().get(1).setEeObject(aster).setVisParams({min:0,max:200,gamma:1.5});
+        linkedMap.layers().get(0).setEeObject(aster).setVisParams({min:0,max:200,gamma:1.5});
+      });
+      imagePanel.insert(5,AsterButton)
+    }           
+    var asterNumImages=ee.Number(asterColl.size())
+    var asterLabel=ee.String('Show ASTER mosaic (').cat(asterNumImages).cat(')').evaluate(addAsterButton);
+    
+    
+    //L4           
+    var L4Coll=ee.ImageCollection(ee.ImageCollection("LANDSAT/LT04/C01/T1_TOA"))
+                .filterDate(startDate,endDate)
+                .filterBounds(roiGeom)
+                // .filter(ee.Filter.calendarRange(startMonth,endMonth,'month'))
+                .filter(ee.Filter.lte('CLOUD_COVER',cloudCover))
+                .select(['B3','B2','B1'])
+                .sort('CLOUD_COVER',false)
+                .limit(100);
+    
+    var L4=L4Coll.mosaic()
+                .clip(geomRectangle.geometry());
+    var addL4Button=function(input){
+      var L4Button=ui.Button({label:input,style:{stretch:'both'}});
+      L4Button.onClick(function(){
+        Map.layers().get(1).setEeObject(L4).setVisParams({min:0,max:0.8,gamma:1.5});
+        linkedMap.layers().get(0).setEeObject(L4).setVisParams({min:0,max:0.8,gamma:1.5});
+      });
+      imagePanel.insert(4,L4Button)
+    }             
+    var L4numImages=ee.Number(L4Coll.size())//.evaluate(addL4Button);
+    var L4Label=ee.String('Show Landsat 4 mosaic (').cat(L4numImages).cat(')').evaluate(addL4Button);
+    
+    
+                
+    var L5Coll=ee.ImageCollection("LANDSAT/LT05/C01/T1_TOA")
+                .filterDate(startDate,endDate)
+                .filterBounds(roiGeom)
+                // .filter(ee.Filter.calendarRange(startMonth,endMonth,'month'))
+                .filter(ee.Filter.lte('CLOUD_COVER',cloudCover))
+                .select(['B3','B2','B1'])
+                .sort('CLOUD_COVER',false)
+                .limit(100);
+                
+    var L5=L5Coll.mosaic()
+                .clip(geomRectangle.geometry());
+    var addL5Button=function(input){
+      var L5Button=ui.Button({label:input,style:{stretch:'both'}});
+      L5Button.onClick(function(){
+        Map.layers().get(1).setEeObject(L5).setVisParams({min:0,max:0.8,gamma:1.5});
+        linkedMap.layers().get(0).setEeObject(L5).setVisParams({min:0,max:0.8,gamma:1.5});
+      });
+      imagePanel.insert(3,L5Button);
+    } ;
+    var L5numImages=ee.Number(L5Coll.size());//.evaluate(addL4Button);
+    var L5Label=ee.String('Show Landsat 5 mosaic (').cat(L5numImages).cat(')').evaluate(addL5Button);
+                
+    var L7Coll=ee.ImageCollection('LANDSAT/LE07/C01/T1_TOA')
+                .filterDate(startDate,endDate)
+                .filterBounds(roiGeom)
+                // .filter(ee.Filter.calendarRange(startMonth,endMonth,'month'))
+                .filter(ee.Filter.lte('CLOUD_COVER',cloudCover))
+                .select(['B3','B2','B1'])
+                .sort('CLOUD_COVER',false)
+                .limit(100);
+                
+     var L7=L7Coll.mosaic()
+                .clip(geomRectangle.geometry());
+    var addL7Button=function(input){
+      var L7Button=ui.Button({label:input,style:{stretch:'both'}});
+      L7Button.onClick(function(){
+        Map.layers().get(1).setEeObject(L7).setVisParams({min:0,max:0.8,gamma:1.5});
+        linkedMap.layers().get(0).setEeObject(L7).setVisParams({min:0,max:0.8,gamma:1.5});
+      });
+      imagePanel.insert(2,L7Button);
+    };             
+    var L7numImages=ee.Number(L7Coll.size());//.evaluate(addL4Button);
+    var L7Label=ee.String('Show Landsat 7 mosaic (').cat(L7numImages).cat(')').evaluate(addL7Button);
+    
+                
+    
+    linkedMap.addLayer(L7,{min:0,max:0.8,gamma:1.5});
+    
+    Map.addLayer(L7,{min:0,max:0.8,gamma:1.5});
+    Map.addLayer(RGIimageColl,{min:0,max:1,palette:['red','blue'],opacity:0.5});
+  
+    
+    
+    // var L4Button=ui.Button('Show Landsat 4 mosaic');
+    // L4Button.onClick(function(){
+    //   Map.layers().get(1).setEeObject(L4);
+    //   linkedMap.layers().get(0).setEeObject(L4);
+    // });
+    // var L5Button=ui.Button('Show Landsat 5 mosaic');
+    // L5Button.onClick(function(){
+    //   Map.layers().get(1).setEeObject(L5);
+    //   linkedMap.layers().get(0).setEeObject(L5);
+    // });
+    // var L7Button=ui.Button('Show Landsat 7 mosaic');
+    // L7Button.onClick(function(){
+    //   Map.layers().get(1).setEeObject(L7)
+    //   linkedMap.layers().get(0).setEeObject(L7)
+    // })
+    
+    // imagePanel//.add(L7Button).add(L5Button).add(L4Button)//.add(AsterButton)
+    
+    
+    // var listNumImages=ee.List([L7Coll.size(),L5Coll.size(),L4Coll.size(),asterColl.size()]).aside(print).evaluate(buttonsFunction);
+    
+    linkedMap.add(imagePanel);
+    linkedMap.add(restartPanel);
+        
+  
+};
+
+// start();
+// imageVis();
+
+
